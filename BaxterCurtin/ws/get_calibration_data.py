@@ -2,6 +2,7 @@
 import sys
 import rospy
 import actionlib
+import math
 
 # For file saving
 import os
@@ -33,31 +34,6 @@ left_arm_group.set_planner_id("RRTConnectkConfigDefault")
 moveit_tolerance = 0.01
 left_arm_group.set_goal_tolerance(moveit_tolerance)
 
-pose1 = Pose(
-    position = Point(0.53, 0.21, 0.17),
-    orientation = Quaternion(-0.18, -0.98, -0.02, 0.01)
-)
-
-pose2 = Pose(
-    position = Point(0.77, 0.01, 0.25),
-    orientation = Quaternion(0.65, -0.66, 0.36, 0.13)
-)
-
-pose3 = Pose(
-    position = Point(0.79, 0.29, 0.30),
-    orientation = Quaternion(0.43, 0.89, 0.02, 0.14)
-)
-
-pose4 = Pose(
-    position = Point(0.90, 0.13, 0.28),
-    orientation = Quaternion(0.45, 0.78, -0.14, 0.43)
-)
-
-pose5 = Pose(
-    position = Point(0.72, 0.50, 0.27),
-    orientation = Quaternion(0.52, 0.83, 0.19, 0.08)
-)
-
 def save_pose(current: PoseStamped, pose_number: int):
     
     if not os.path.exists("baxter_poses"):
@@ -77,24 +53,41 @@ def save_pose(current: PoseStamped, pose_number: int):
 
 if __name__ == "__main__":
     
-    poses =[pose1, pose2, pose3, pose4, pose5]
+    # Untucked
+    joints1 = [-0.077, -0.998, -1.192, 1.940, 0.672, 1.032, -0.499]
 
-    for i, pose in enumerate(poses, 1):
+    joints2 = [-0.125, -0.571, -1.159, 1.481, 0.625, 0.748, -2.043]
+
+    joints3 = [-0.002, -1.141, -0.993, 1.843, 0.724, 1.173, 1.048]
+
+    joints4 = [-0.017, -0.515, -1.116, 1.318, 1.182, 0.646, 2.065]
+
+    joints5 = [-0.447, -0.678, -1.054, 1.205, 0.358, 1.063, -0.549]
+
+    joints_list = [joints1, joints2, joints3, joints4, joints5]
+
+    for i, joints in enumerate(joints_list, 1):
 
         left_arm_group.set_start_state_to_current_state()
-        left_arm_group.set_pose_target(pose)
+        left_arm_group.set_joint_value_target(joints)
         ok = left_arm_group.go(wait=True)
         left_arm_group.stop()
         left_arm_group.clear_pose_targets()
         
         if not ok:
-            print(f"Failed to move to pose {i}")
+            print(f"Failed to move to joints {i}")
             continue
         
         rospy.sleep(2.0)
 
         current = left_arm_group.get_current_pose()
         save_pose(current, i)
+    
+    left_arm_group.set_start_state_to_current_state()
+    left_arm_group.set_joint_value_target(joints1)
+    ok = left_arm_group.go(wait=True)
+    left_arm_group.stop()
+    left_arm_group.clear_pose_targets()
 
     moveit_commander.roscpp_shutdown()
     sys.exit(0)
