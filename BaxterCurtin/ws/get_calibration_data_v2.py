@@ -83,12 +83,12 @@ if __name__ == "__main__":
             print(f"Failed to move to joints {i}")
             continue
         
-        rospy.sleep(2.0)
+        rospy.sleep(4.0)
 
         current = left_arm_group.get_current_pose()
         save_pose(current, i)
 
-        rospy.sleep(2.0)
+        rospy.sleep(1.0)
     
     # left_arm_group.set_start_state_to_current_state()
     # left_arm_group.set_joint_value_target(untucked)
