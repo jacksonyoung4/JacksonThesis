@@ -20,11 +20,11 @@ Deploy and connect to terminal.
 ## FoundationPose Setup Inside Pod
 -	Clone this repo: 
 ``` bash
-git clone https://github.com/jacksonyoung4/Jackson-FoundationPose.git
+git clone https://github.com/jacksonyoung4/JacksonThesis.git
 ```
 -	Enter FoundationPose directory: 
 ``` bash
-cd Jackson-FoundationPose
+cd JacksonThesis/FoundationPose
 ```
 -	Download weights:
 ``` bash
@@ -39,6 +39,10 @@ mv no_diffusion weights
 ``` bash
 bash build_all.sh
 ```
+## Add Custom Data
+- Upload custom data to google drive and install using gdown
+- Must include RGB, depth, mask and mesh
+
 ## Performing Pose Estimation
 - Perform pose estimation:
 ``` bash

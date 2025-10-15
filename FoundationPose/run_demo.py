@@ -32,8 +32,10 @@ if __name__=='__main__':
   debug_dir = args.debug_dir
   os.system(f'rm -rf {debug_dir}/* && mkdir -p {debug_dir}/track_vis {debug_dir}/ob_in_cam')
 
-  to_origin, extents = trimesh.bounds.oriented_bounds(mesh)
-  bbox = np.stack([-extents/2, extents/2], axis=0).reshape(2,3)
+  #to_origin, extents = trimesh.bounds.oriented_bounds(mesh)
+  #bbox = np.stack([-extents/2, extents/2], axis=0).reshape(2,3)
+  bbox = mesh.bounds
+  to_origin = np.eye(4)
 
   scorer = ScorePredictor()
   refiner = PoseRefinePredictor()
