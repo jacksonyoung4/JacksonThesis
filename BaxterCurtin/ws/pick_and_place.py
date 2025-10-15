@@ -38,6 +38,7 @@ left_arm_group.set_planner_id("RRTConnectkConfigDefault")
 
 moveit_tolerance = 0.01
 left_arm_group.set_goal_tolerance(moveit_tolerance)
+left_arm_group.set_planning_time(10)
 
 # Gripper setup
 robotiq_client = actionlib.SimpleActionClient("command_robotiq_action", CommandRobotiqGripperAction)   
@@ -50,7 +51,7 @@ robotiq_closed.emergency_release = False
 robotiq_closed.stop = False
 robotiq_closed.position = 0.00
 robotiq_closed.speed = 0.1
-robotiq_closed.force = 1.0
+robotiq_closed.force = 100.0
 
 robotiq_open = CommandRobotiqGripperGoal()
 robotiq_open.emergency_release = False
@@ -78,7 +79,7 @@ def create_pose(position, orientation):
     
     return pose
 
-def rotate_quat_z(angle):
+def gripper_quat(angle):
     x = -np.sin(angle/2)
     y = np.cos(angle/2)
     z = 0
@@ -91,25 +92,79 @@ def move_to_joints(joints):
     left_arm_group.stop()
     left_arm_group.clear_pose_targets()
 
+def determine_upright_axis(R):
+    if abs(R[2,0]) > abs(R[2,1]) and abs(R[2,0]) > abs(R[2,2]):
+        upright_axis = "x"
+    elif abs(R[2,1]) > abs(R[2,0]) and abs(R[2,1]) > abs(R[2,2]):
+        upright_axis = "y"
+    else:
+        upright_axis = "z"
+
+    return upright_axis
+
+def compute_yaw(R, upright_axis):
+    # If x axis is upright, calculate yaw about y axis
+    if upright_axis == "x":
+        yaw = np.arctan2(R[1,1], R[0,1])
+    # If y axis is upright, calculate yaw about x axis
+    elif upright_axis == "y":
+        yaw = np.arctan2(R[1,0], R[0,0])
+    # If z axis is upright, calculate yaw about x axis
+    else:
+        yaw = np.arctan2(R[1,1], R[0,1])
+
+    return yaw
+
+def object_grasp_dimension(upright_axis):
+    if upright_axis == "x":
+        dimension = 0.075
+    elif upright_axis == "y":
+        dimension = 0.135
+    else:
+        dimension = 0.048
+    return dimension
+
+def xy_offset(yaw):
+    gripper_offset = 0.012
+    x_offset = gripper_offset * np.cos(yaw)
+    y_offset = gripper_offset * np.sin(yaw)
+    return x_offset, y_offset
+
+
 if __name__ == "__main__":
     
     # Load transformation matrices
     cam2base = np.loadtxt('cam2base.txt')
-    gripper2target = np.loadtxt('gripper2target.txt')
-    target2cam = np.loadtxt('target2cam.txt')
+    target2cam = np.loadtxt('test_poses/2.txt')
 
     # Compute yaw of object about z axis in base frame - gripper aligns for pickup
     target2base = cam2base @ target2cam
-    yaw_angle = np.arctan2(target2base[1,0], target2base[0,0])
-    orientation = rotate_quat_z(yaw_angle)
+    R = target2base[0:3, 0:3]
+    upright_axis = determine_upright_axis(R)
+    yaw_angle = compute_yaw(R, upright_axis)
+    print(yaw_angle)
+    orientation = gripper_quat(yaw_angle)
 
     # Compute gripper position for pickup
-    gripper2base = target2base @ gripper2target
-    position = gripper2base[0:3, 3]
+    position = target2base[0:3, 3]
+    position[2] += 0.055
+    grasp_dimension = object_grasp_dimension(upright_axis)
+    
+    # Check if object grasp dimension is larger than distance between grip point and top of gripper
+    if grasp_dimension/2 > 0.04: 
+        position[2] += grasp_dimension/2 - 0.04
+    
+    x_offset, y_offset = xy_offset(yaw_angle)
+    position[0] -= x_offset
+    position[1] -= y_offset
+    
+    print("Pickup position: ", position)
+    print("Pickup orientation (xyzw): ", orientation)
 
     # Starting positon joint values
     untucked = [-0.077, -0.998, -1.192, 1.940, 0.672, 1.032, -0.499]
     untucked_high = [0.064, -1.116, -1.365, 1.777, 0.511, 1.266, -0.361]
+    above_box = [0.580, -0.821, -1.286, 1.541, 0.704, 1.381, 0.047]
     
     # Safe start movements
     move_to_joints(untucked)
@@ -138,13 +193,17 @@ if __name__ == "__main__":
     rospy.sleep(1)
 
     # Move back to start
+    move_to_joints(above_box)
+    rospy.sleep(1)
+
+     # Open gripper
+    robotiq_client.send_goal(robotiq_open)
+    robotiq_client.wait_for_result() 
+
     move_to_joints(untucked_high)
     rospy.sleep(1)
     move_to_joints(untucked)
     rospy.sleep(1)
-    # Open gripper
-    robotiq_client.send_goal(robotiq_open)
-    robotiq_client.wait_for_result() 
-
+   
     moveit_commander.roscpp_shutdown()
     sys.exit(0)

@@ -38,5 +38,5 @@ robotiq_open.position = 0.085
 robotiq_open.speed = 0.1
 robotiq_open.force = 5.0
 
-robotiq_client.send_goal(robotiq_closed)
+robotiq_client.send_goal(robotiq_open)
 robotiq_client.wait_for_result()
