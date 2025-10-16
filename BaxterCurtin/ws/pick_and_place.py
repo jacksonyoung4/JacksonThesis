@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import numpy as np
+import math
 from scipy.spatial.transform import Rotation as R
 from geometry_msgs.msg import PoseStamped, Pose
 
@@ -112,7 +113,8 @@ def compute_yaw(R, upright_axis):
     # If z axis is upright, calculate yaw about x axis
     else:
         yaw = np.arctan2(R[1,1], R[0,1])
-
+    if yaw > math.pi/2:
+        yaw -= math.pi
     return yaw
 
 def object_grasp_dimension(upright_axis):
@@ -135,14 +137,13 @@ if __name__ == "__main__":
     
     # Load transformation matrices
     cam2base = np.loadtxt('cam2base.txt')
-    target2cam = np.loadtxt('test_poses/2.txt')
+    target2cam = np.loadtxt('test_poses/11.txt')
 
     # Compute yaw of object about z axis in base frame - gripper aligns for pickup
     target2base = cam2base @ target2cam
     R = target2base[0:3, 0:3]
     upright_axis = determine_upright_axis(R)
     yaw_angle = compute_yaw(R, upright_axis)
-    print(yaw_angle)
     orientation = gripper_quat(yaw_angle)
 
     # Compute gripper position for pickup
@@ -155,6 +156,8 @@ if __name__ == "__main__":
         position[2] += grasp_dimension/2 - 0.04
     
     x_offset, y_offset = xy_offset(yaw_angle)
+    print("x offset: ", x_offset)
+    print("y offset: ", y_offset)
     position[0] -= x_offset
     position[1] -= y_offset
     
@@ -167,13 +170,8 @@ if __name__ == "__main__":
     above_box = [0.580, -0.821, -1.286, 1.541, 0.704, 1.381, 0.047]
     
     # Safe start movements
-    move_to_joints(untucked)
-    rospy.sleep(1)
     move_to_joints(untucked_high)
     rospy.sleep(1)
-    # Open gripper
-    robotiq_client.send_goal(robotiq_open)
-    robotiq_client.wait_for_result()
 
     # Go to position 10cm above object
     approach_position = position.copy()
