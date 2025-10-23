@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 import math
+from pathlib import Path
 from scipy.spatial.transform import Rotation as R
 from geometry_msgs.msg import PoseStamped, Pose
 
@@ -52,7 +53,7 @@ robotiq_closed.emergency_release = False
 robotiq_closed.stop = False
 robotiq_closed.position = 0.00
 robotiq_closed.speed = 0.1
-robotiq_closed.force = 100.0
+robotiq_closed.force = 5.0
 
 robotiq_open = CommandRobotiqGripperGoal()
 robotiq_open.emergency_release = False
@@ -60,6 +61,21 @@ robotiq_open.stop = False
 robotiq_open.position = 0.085
 robotiq_open.speed = 0.1
 robotiq_open.force = 5.0
+
+# Object dimensions
+dimensions = {
+    "vegemite": [0.075, 0.135, 0.048],  # x, y, z
+    "polenta": [0.080, 0.150, 0.050],
+    "cereal": [0.140, 0.230, 0.060]
+}
+
+# Box drop off location
+box_position = [0.565, 0.579, 0.193]
+
+# Standard position joint values
+untucked = [-0.077, -0.998, -1.192, 1.940, 0.672, 1.032, -0.499]
+untucked_high = [0.064, -1.116, -1.365, 1.777, 0.511, 1.266, -0.361]
+above_box = [0.578, -0.883, -1.350, 1.498, 0.671, 1.518, 0.073]
 
 def move_to_pose(position, orientation):
    pose = create_pose(position, orientation)
@@ -100,7 +116,7 @@ def determine_upright_axis(R):
         upright_axis = "y"
     else:
         upright_axis = "z"
-
+    print("Upright axis: ", upright_axis)
     return upright_axis
 
 def compute_yaw(R, upright_axis):
@@ -110,20 +126,22 @@ def compute_yaw(R, upright_axis):
     # If y axis is upright, calculate yaw about x axis
     elif upright_axis == "y":
         yaw = np.arctan2(R[1,0], R[0,0])
-    # If z axis is upright, calculate yaw about x axis
+    # If z axis is upright, calculate yaw about y axis
     else:
         yaw = np.arctan2(R[1,1], R[0,1])
     if yaw > math.pi/2:
         yaw -= math.pi
+    elif yaw < -math.pi/2:
+        yaw += math.pi
     return yaw
 
-def object_grasp_dimension(upright_axis):
+def object_grasp_dimension(upright_axis, object_dimensions):
     if upright_axis == "x":
-        dimension = 0.075
+        dimension = object_dimensions[0]
     elif upright_axis == "y":
-        dimension = 0.135
+        dimension = object_dimensions[1]
     else:
-        dimension = 0.048
+        dimension = object_dimensions[2]
     return dimension
 
 def xy_offset(yaw):
@@ -133,70 +151,104 @@ def xy_offset(yaw):
     return x_offset, y_offset
 
 
+def order_grasp_poses(grasp_poses):
+    distances = []
+    for pose in grasp_poses:
+        position = pose.position
+        distance_to_box = math.sqrt((box_position[0]-position.x)**2 + (box_position[1]-position.y)**2 + (box_position[2]-position.z)**2)
+        distances.append((pose, distance_to_box))
+
+    distances.sort(key=lambda x: x[1])
+    sorted_poses = [pose for pose, _ in distances]
+    return sorted_poses
+
 if __name__ == "__main__":
     
     # Load transformation matrices
     cam2base = np.loadtxt('cam2base.txt')
-    target2cam = np.loadtxt('test_poses/11.txt')
 
-    # Compute yaw of object about z axis in base frame - gripper aligns for pickup
-    target2base = cam2base @ target2cam
-    R = target2base[0:3, 0:3]
-    upright_axis = determine_upright_axis(R)
-    yaw_angle = compute_yaw(R, upright_axis)
-    orientation = gripper_quat(yaw_angle)
+    object_poses = {}
+    grasp_poses = []
 
-    # Compute gripper position for pickup
-    position = target2base[0:3, 3]
-    position[2] += 0.055
-    grasp_dimension = object_grasp_dimension(upright_axis)
-    
-    # Check if object grasp dimension is larger than distance between grip point and top of gripper
-    if grasp_dimension/2 > 0.04: 
-        position[2] += grasp_dimension/2 - 0.04
-    
-    x_offset, y_offset = xy_offset(yaw_angle)
-    print("x offset: ", x_offset)
-    print("y offset: ", y_offset)
-    position[0] -= x_offset
-    position[1] -= y_offset
-    
-    print("Pickup position: ", position)
-    print("Pickup orientation (xyzw): ", orientation)
+    pose_folder = Path('test_poses/')
 
-    # Starting positon joint values
-    untucked = [-0.077, -0.998, -1.192, 1.940, 0.672, 1.032, -0.499]
-    untucked_high = [0.064, -1.116, -1.365, 1.777, 0.511, 1.266, -0.361]
-    above_box = [0.580, -0.821, -1.286, 1.541, 0.704, 1.381, 0.047]
-    
-    # Safe start movements
+    for file in pose_folder.glob("*.txt"):
+        object_name = file.stem
+        object_poses[object_name] = np.loadtxt(file)
+
+    for object_name, pose in object_poses.items():
+        
+        target2cam = pose
+        object_dimensions = dimensions[object_name]
+        
+        # Compute yaw of object about z axis in base frame - gripper aligns for pickup
+        target2base = cam2base @ target2cam
+        R = target2base[0:3, 0:3]
+        upright_axis = determine_upright_axis(R)
+        yaw_angle = compute_yaw(R, upright_axis)
+        orientation = gripper_quat(yaw_angle)
+
+        # Compute gripper position for pickup
+        position = target2base[0:3, 3]
+        position[2] += 0.055
+        grasp_dimension = object_grasp_dimension(upright_axis, object_dimensions)
+        
+        # Check if object grasp dimension is larger than distance between grip point and top of gripper
+        print("Grasp dimension: ", grasp_dimension)
+        if grasp_dimension/2 > 0.04: 
+            print("TRUE")
+            position[2] += grasp_dimension/2 - 0.04
+        
+        x_offset, y_offset = xy_offset(yaw_angle)
+        print("x offset: ", x_offset)
+        print("y offset: ", y_offset)
+        position[0] -= x_offset
+        position[1] -= y_offset
+
+        pose = create_pose(position, orientation)
+        grasp_poses.append(pose)
+
+    # Order grasp poses by distance to box drop-off
+    if len(grasp_poses) > 1:
+        ordered_poses = order_grasp_poses(grasp_poses)
+    else:
+        ordered_poses = grasp_poses
+
     move_to_joints(untucked_high)
     rospy.sleep(1)
 
-    # Go to position 10cm above object
-    approach_position = position.copy()
-    approach_position[2] += 0.1
-    move_to_pose(approach_position, orientation)
-    rospy.sleep(1)
+    for i, pose in enumerate(ordered_poses):
 
-    # Go to object pickup position
-    move_to_pose(position, orientation)
-    rospy.sleep(1)
-    robotiq_client.send_goal(robotiq_closed)
-    robotiq_client.wait_for_result()
-    rospy.sleep(1)
+        pose_pos = ordered_poses[i].position 
+        position = [pose_pos.x, pose_pos.y, pose_pos.z]
 
-    # Move back to 10cm above object
-    move_to_pose(approach_position, orientation)
-    rospy.sleep(1)
+        pose_ori = ordered_poses[i].orientation
+        orientation = [pose_ori.x, pose_ori.y, pose_ori.z, pose_ori.w]
 
-    # Move back to start
-    move_to_joints(above_box)
-    rospy.sleep(1)
+        # Go to position 10cm above object
+        approach_position = position.copy()
+        approach_position[2] += 0.1
+        move_to_pose(approach_position, orientation)
+        rospy.sleep(1)
 
-     # Open gripper
-    robotiq_client.send_goal(robotiq_open)
-    robotiq_client.wait_for_result() 
+        # Go to object pickup position
+        move_to_pose(position, orientation)
+        rospy.sleep(1)
+        robotiq_client.send_goal(robotiq_closed)
+        robotiq_client.wait_for_result()
+        rospy.sleep(1)
+
+        # Move back to 10cm above object
+        move_to_pose(approach_position, orientation)
+        rospy.sleep(1)
+
+        # Move above box drop-off location
+        move_to_joints(above_box)
+        rospy.sleep(1)
+        
+        # Open gripper
+        robotiq_client.send_goal(robotiq_open)
+        robotiq_client.wait_for_result()
 
     move_to_joints(untucked_high)
     rospy.sleep(1)
