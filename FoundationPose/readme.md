@@ -52,7 +52,7 @@ bash build_all.sh
 ```
 ## Working with Custom Data
 - Generate object mesh by following README in BundleSDF directory.
-- Record object using record_for_FoundationPose from RealSense directory for pose estimation and tracking.
+- Record object using record_for_FoundationPose.py from RealSense directory for pose estimation and tracking.
 - Compile files. Must include RGB, depth, mask (first frame only), mesh, and intrinsic matrix of camera in format:
 ```
 test_data

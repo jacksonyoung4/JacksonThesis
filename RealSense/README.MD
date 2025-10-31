@@ -27,7 +27,7 @@ python record_for_BundleSDF.py
 python record_for_FoundationPose.py
 ```
 ## Capture Pose
-- Same as record_for_FoundationPose but only records one frame.
+- Same as record_for_FoundationPose.py but only records one frame.
 - Useful if only initial object pose estimation in first frame is needed (not tracking).
 ``` bash
 python capture_pose.py

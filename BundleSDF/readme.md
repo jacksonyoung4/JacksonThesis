@@ -49,7 +49,7 @@ cd weights
 gdown https://drive.google.com/uc?id=1M-VD35-qdB5Iw-AtbDBCKC7hPolFW9UY
 ```
 ## Working with Custom Data
-Record object using record_for_BundleSDF from RealSense directory.
+Record object using record_for_BundleSDF.py from RealSense directory.
 ### Obtain Masks with XMem
 For BundleSDF, a mask of the object is required for each image frame.   
 These can be generated with XMem: https://github.com/hkchengrex/XMem
@@ -75,7 +75,7 @@ git clone https://github.com/hkchengrex/XMem.git
 │   │   │   ├── ...
 │   │   └── ...
 ```
-- Data will be in this format by default if using record_for_BundleSDF.
+- Data will be in this format by default if using record_for_BundleSDF.py.
 - Run XMem:
 ``` bash
 -	python3 eval.py --output ../output/dataName --generic_path ../dataName --dataset G
@@ -83,7 +83,7 @@ git clone https://github.com/hkchengrex/XMem.git
 -	Result is located in output folder.
 
 ### Compile Files
-- With output of XMem as masks, compile files in format:
+- Taking the masks from the output of XMem, compile files in format:
 ```
 object_name
   ├──rgb/    (PNG files)
